@@ -19,7 +19,7 @@ const port = process.env.PORT || 3001
 
 const app = express()
 app.use(cors({
-    origin: 'https://buynewavs-jp.onrender.com/',
+    origin: 'https://buynewavs-jp.onrender.com',
     credentials: true // Cho phép gửi cookies
 }))
 
