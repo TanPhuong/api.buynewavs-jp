@@ -72,6 +72,7 @@ chokidar.watch(jsonFile).on('change', () => {
 
 // Lưu thông tin cart vào session tương ứng với cookies
 app.use(session({
+    name: 'sid',
     secret: '79b140749f33f7c51e651b86381dd6bfce5c7d69758dd6b8a302dbc05e17bee18f401c3e793c0d56f13d6e2c3daecb9093922f69d8852de3611b2609407cdb46', // Mã hóa sessionID
     resave: false,
     saveUninitialized: true,
@@ -79,7 +80,8 @@ app.use(session({
         secure: true,
         maxAge: 3 * 24 * 60 * 60 * 1000, // 3 ngày
         httpOnly: true,
-        sameSite: 'none'
+        sameSite: 'none',
+        path: '/'
     }
 }))
 
