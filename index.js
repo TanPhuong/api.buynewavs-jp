@@ -19,7 +19,6 @@ const port = process.env.PORT || 3001
 
 const app = express()
 app.use(cors({
-    origin: window.location.origin,
     credentials: true // Cho phép gửi cookies
 }))
 
