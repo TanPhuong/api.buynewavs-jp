@@ -1,6 +1,6 @@
 const express = require('express')
 const session = require('express-session');
-
+const crypto = require('crypto');
 const dotenv = require('dotenv')
 const cors = require('cors')
 
@@ -18,12 +18,16 @@ dotenv.config()
 const port = process.env.PORT || 3001
 
 const app = express()
+const cookieParser = require('cookie-parser');
+
 app.use(cors({
     origin: 'https://buynewavs-jp.onrender.com',
     credentials: true // Cho phép gửi cookies
 }))
 
 app.use(express.json())
+app.use(cookieParser())
+
 
 app.listen(port, () => console.log('Connecting to port: ' + port))
 
@@ -72,7 +76,6 @@ chokidar.watch(jsonFile).on('change', () => {
 
 // Lưu thông tin cart vào session tương ứng với cookies
 app.use(session({
-    name: 'sid',
     secret: '79b140749f33f7c51e651b86381dd6bfce5c7d69758dd6b8a302dbc05e17bee18f401c3e793c0d56f13d6e2c3daecb9093922f69d8852de3611b2609407cdb46', // Mã hóa sessionID
     resave: false,
     saveUninitialized: true,
@@ -115,6 +118,111 @@ app.get('/cart/view', (req, res) => {
     res.json(cart);
 })
 
+// Cart api with cookie
+
+app.post('/api/cart/add', (req, res) => {
+
+    const item = req.body;
+    console.log(req.body)
+    console.log(req.cookies.cart);
+
+    // Kiểm tra item hợp lệ
+    if (!item || !item.id) {
+        return res.status(400).json({ error: 'Invalid item: id is required' });
+    }
+
+    // Đọc giỏ hàng từ cookie
+    let cart = [];
+    if (req.cookies.cart) {
+        try {
+            cart = JSON.parse(req.cookies.cart);
+        } catch (e) {
+            console.error('Invalid cart cookie:', req.cookies.cart);
+            cart = [];
+        }
+    }
+    // Lọc bỏ null để tinh giảm
+    cart = cart.filter(i => i !== null);
+    console.log('Cart before add:', cart);
+
+    // Tìm sản phẩm trùng id
+    const existingItem = cart.find(i => i && i.id === item.id);
+    if (existingItem) {
+        // Tăng quantity nếu sản phẩm đã tồn tại
+        existingItem.quantity = (existingItem.quantity || 1) + (item.quantity || 1);
+    } else {
+        // Thêm sản phẩm mới
+        cart.push({ id: item.id, quantity: item.quantity || 1 });
+    }
+
+    res.cookie('cart', JSON.stringify(cart), {
+        maxAge: 3 * 24 * 60 * 60 * 1000,
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/'
+    });
+
+    res.json(cart);
+});
+
+app.get('/api/cart/view', (req, res) => {
+    let cart = [];
+    if (req.cookies.cart) {
+        try {
+            cart = JSON.parse(req.cookies.cart);
+        } catch (e) {
+            console.error('Invalid cart cookie:', req.cookies.cart);
+            cart = [];
+        }
+    }
+    res.json(cart);
+});
+
+app.delete('/api/cart/delete', (req, res) => {
+    const itemId = req.body.id; // Lấy id từ body
+    console.log('Delete item ID:', itemId);
+
+    // Kiểm tra id hợp lệ
+    if (!itemId) {
+        return res.status(400).json({ error: 'Missing item ID' });
+    }
+
+    // Đọc giỏ hàng từ cookie
+    let cart = [];
+    if (req.cookies.cart) {
+        try {
+            cart = JSON.parse(req.cookies.cart);
+        } catch (e) {
+            console.error('Invalid cart cookie:', req.cookies.cart);
+            cart = [];
+        }
+    }
+    console.log('Cart before delete:', cart);
+
+    // Lọc bỏ sản phẩm có id khớp
+    const initialLength = cart.length;
+    cart = cart.filter(item => item && item.id !== itemId); // Bỏ qua null và khớp id
+
+    // Kiểm tra xem có sản phẩm nào được xóa không
+    if (cart.length === initialLength) {
+        return res.status(404).json({ error: 'Item not found in cart' });
+    }
+
+    // Cập nhật cookie
+    res.cookie('cart', JSON.stringify(cart), {
+        maxAge: 3 * 24 * 60 * 60 * 1000, // 3 ngày
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/'
+    });
+
+    console.log('Cart after delete:', cart);
+    res.json({ cart }); // Trả về giỏ hàng mới
+});
+
+
 // Payment API
 app.post('/payment/create-profile', (req, res) => {
 
@@ -142,7 +250,7 @@ app.post('/payment/create-profile', (req, res) => {
                 console.error('Lỗi tạo profile:', err.message);
                 return res.status(500).json({ error: err.message });
             }
-    
+
             console.log('Đã có CustomerProfileId:', res.json({ customerProfileId }));
             res.json({ customerProfileId })
         });
@@ -153,7 +261,7 @@ app.post('/payment/create-profile', (req, res) => {
 
 
 app.get('/payment/get-form/:profileId', (req, res) => {
-    
+
     const customerProfileId = req.params.profileId;
 
     getCustomerProfile(customerProfileId, (err, userInfo) => {
